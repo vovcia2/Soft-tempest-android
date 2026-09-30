@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Soft TEMPEST</string>
+    <string name="title">Soft TEMPEST display masking</string>
+    <string name="subtitle">Full-screen per-frame noise overlay that raises the noise floor of the display\'s electromagnetic emission.</string>
+
+    <string name="permission_title">Overlay permission</string>
+    <string name="permission_missing">The app needs the \"Display over other apps\" permission to draw the noise layer.</string>
+    <string name="permission_granted">Overlay permission granted.</string>
+    <string name="permission_button">Grant permission</string>
+    <string name="notification_permission_rationale">Android 13+ requires notification permission to show the foreground-service status notification.</string>
+
+    <string name="overlay_switch">Noise overlay</string>
+    <string name="overlay_running">Overlay is running</string>
+    <string name="overlay_stopped">Overlay is stopped</string>
+
+    <string name="amplitude_label">Noise amplitude (opacity)</string>
+    <string name="amplitude_value">%1$d %%</string>
+    <string name="amplitude_hint">Higher values mask more but make the screen harder to read. This is the real trade-off; there is no free lunch.</string>
+
+    <string name="mode_label">Noise mode</string>
+    <string name="mode_white">White noise (uniform)</string>
+    <string name="mode_hfreq">High-frequency horizontal</string>
+    <string name="mode_temporal">Temporal (fast time variation)</string>
+    <string name="mode_white_desc">Independent random value per pixel per frame, flat spectrum.</string>
+    <string name="mode_hfreq_desc">Energy concentrated in high horizontal spatial frequencies: adjacent pixels along a row are anti-correlated, which is where the pixel-clock emission lives.</string>
+    <string name="mode_temporal_desc">Horizontal HF noise plus several sub-patterns mixed within one frame for extra temporal decorrelation.</string>
+
+    <string name="disclaimer_title">Limitations (read this)</string>
+    <string name="disclaimer_body">
+        • Windows flagged FLAG_SECURE (banking, DRM video, password screens) are rendered by the system so that this overlay does NOT appear above them. Those screens are not protected.\n
+        • Noise is re-randomised every frame because a static pattern averages out as 1/√N over N captured frames. Even so, averaging still reduces the effect; this is a noise-floor raise, not a guarantee.\n
+        • No effectiveness has been measured with real RF equipment on your device. Treat this as a prototype and as a complement to hardware shielding, never a replacement.\n
+        • Continuous full-screen GPU rendering costs battery.
+    </string>
+
+    <string name="notification_channel_name">Noise overlay</string>
+    <string name="notification_channel_desc">Status of the soft-TEMPEST noise overlay</string>
+    <string name="notification_title">Noise overlay active</string>
+    <string name="notification_text">Mode: %1$s · amplitude %2$d %%</string>
+    <string name="notification_action_stop">Stop</string>
+    <string name="notification_action_start">Start</string>
+
+    <string name="toast_permission_required">Grant the overlay permission first.</string>
+</resources>
