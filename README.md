@@ -35,6 +35,14 @@ try to work around them.
    harder to read. There is no setting that protects for free.
 6. **Alpha blending only.** As a normal overlay window the app can only blend over content;
    it cannot modulate the display's backlight, timing or drive voltages.
+7. **Opacity cap from untrusted-touch blocking (Android 12+).** The system drops touches that
+   pass through a non-trusted overlay whose *window* alpha exceeds a threshold (0.8 by
+   default), even with `FLAG_NOT_TOUCHABLE`. The service therefore sets the window alpha just
+   below `InputManager.getMaximumObscuringOpacityForTouch()`, and the shader compensates so the
+   amplitude slider still maps to effective opacity up to that cap. Without this, the launcher
+   and every other app become unclickable while the overlay is on.
+8. **"Screen overlay detected".** Permission dialogs and some Settings screens refuse input
+   while any overlay is on top (`FLAG_WINDOW_IS_OBSCURED`). Stop the overlay to use them.
 
 ## How it works
 

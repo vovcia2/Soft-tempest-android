@@ -13,6 +13,7 @@ import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.hardware.input.InputManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -98,8 +99,12 @@ class OverlayService : Service() {
 
         if (glView != null) return // already running; just refreshed the notification
 
-        val view = NoiseGLSurfaceView(windowContext).also { it.applySettings(settings) }
-        windowManager.addView(view, buildLayoutParams())
+        val lp = buildLayoutParams()
+        val view = NoiseGLSurfaceView(windowContext).also {
+            it.renderer.windowAlpha = lp.alpha
+            it.applySettings(settings)
+        }
+        windowManager.addView(view, lp)
         glView = view
 
         settings.registerListener(prefsListener)
@@ -146,6 +151,12 @@ class OverlayService : Service() {
         )
         lp.gravity = Gravity.TOP or Gravity.START
         lp.title = "SoftTempestNoise"
+        // Android 12+ drops "untrusted" touches that pass through an overlay window whose
+        // *window* alpha (LayoutParams.alpha, not pixel content) exceeds the system threshold
+        // (0.8 by default). FLAG_NOT_TOUCHABLE alone does not exempt us, so every other app,
+        // the launcher included, would become unclickable. Stay just below the threshold; the
+        // renderer compensates so the slider still maps to the effective opacity.
+        lp.alpha = maxPassThroughWindowAlpha()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             lp.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
@@ -157,6 +168,19 @@ class OverlayService : Service() {
         // noise realisations per second (helps the temporal mode on 90/120 Hz panels).
         pickFastestDisplayMode()?.let { lp.preferredDisplayModeId = it }
         return lp
+    }
+
+    /**
+     * Highest window alpha at which touches still pass through to the apps underneath.
+     * Slightly below the reported threshold to be safe against float rounding in the
+     * input dispatcher.
+     */
+    private fun maxPassThroughWindowAlpha(): Float {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return 1f
+        val threshold = runCatching {
+            getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
+        }.getOrDefault(DEFAULT_MAX_OBSCURING_OPACITY)
+        return (threshold - 0.01f).coerceIn(0.05f, 1f)
     }
 
     private fun defaultDisplay(): Display? =
@@ -235,6 +259,7 @@ class OverlayService : Service() {
         private const val TAG = "OverlayService"
         private const val CHANNEL_ID = "overlay"
         private const val NOTIFICATION_ID = 1
+        private const val DEFAULT_MAX_OBSCURING_OPACITY = 0.8f
 
         const val ACTION_START = "pl.vovcia.softtempest.action.START"
         const val ACTION_STOP = "pl.vovcia.softtempest.action.STOP"

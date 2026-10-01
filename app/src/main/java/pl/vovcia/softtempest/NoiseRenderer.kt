@@ -20,6 +20,13 @@ class NoiseRenderer : GLSurfaceView.Renderer {
     @Volatile var amplitude: Float = NoiseSettings.DEFAULT_AMPLITUDE
     @Volatile var mode: Int = NoiseSettings.DEFAULT_MODE
 
+    /**
+     * Alpha applied to the whole window by the compositor (see OverlayService). The shader
+     * amplitude is scaled up by its inverse so the user-facing amplitude stays the effective
+     * on-screen opacity, up to the window-alpha cap.
+     */
+    @Volatile var windowAlpha: Float = 1f
+
     private val random = SecureRandom()
     private var program = 0
     private var vao = 0
@@ -65,7 +72,8 @@ class NoiseRenderer : GLSurfaceView.Renderer {
 
         GLES30.glUseProgram(program)
         GLES30.glUniform1f(uTime, elapsedSec)
-        GLES30.glUniform1f(uAmplitude, amplitude)
+        val wa = windowAlpha.coerceIn(0.05f, 1f)
+        GLES30.glUniform1f(uAmplitude, (amplitude / wa).coerceIn(0f, 1f))
         GLES30.glUniform1i(uMode, mode)
         GLES30.glUniform2f(uResolution, width.toFloat(), height.toFloat())
         GLES30.glUniform1ui(uSeed, random.nextInt())
