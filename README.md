@@ -41,6 +41,13 @@ try to work around them.
    below `InputManager.getMaximumObscuringOpacityForTouch()`, and the shader compensates so the
    amplitude slider still maps to effective opacity up to that cap. Without this, the launcher
    and every other app become unclickable while the overlay is on.
+
+   This is also why the renderer is a `TextureView`, not the `GLSurfaceView` the spec suggests.
+   SurfaceFlinger reports every buffer-backed layer to the input dispatcher, and the dispatcher
+   combines the opacities of all layers of one UID above the touched app
+   (`1 − (1−a)(1−b)`). A `SurfaceView` adds a second layer, so 0.79 window + 0.79 surface
+   = 0.96 > 0.8 and touches are dropped. A `TextureView` is composited into the window's own
+   buffer, leaving a single layer whose alpha is the window alpha.
 8. **"Screen overlay detected".** Permission dialogs and some Settings screens refuse input
    while any overlay is on top (`FLAG_WINDOW_IS_OBSCURED`). Stop the overlay to use them.
 
@@ -50,7 +57,7 @@ try to work around them.
 |-----------|------|
 | `MainActivity` | Permission flow (`SYSTEM_ALERT_WINDOW`, `POST_NOTIFICATIONS`), Start/Stop switch, amplitude slider, noise-mode selection, disclaimer |
 | `OverlayService` | Foreground service (`specialUse`) that adds a `TYPE_APPLICATION_OVERLAY` window with `FLAG_NOT_TOUCHABLE \| FLAG_NOT_FOCUSABLE \| FLAG_LAYOUT_IN_SCREEN \| FLAG_LAYOUT_NO_LIMITS`, `PixelFormat.TRANSLUCENT`, `MATCH_PARENT × MATCH_PARENT`; notification with a Stop action |
-| `NoiseGLSurfaceView` | `GLSurfaceView` with an ES 3.0 context, RGBA8888 config, `setZOrderOnTop(true)`, `RENDERMODE_CONTINUOUSLY` |
+| `NoiseTextureView` | Transparent `TextureView` with its own EGL thread (RGBA8888, OpenGL ES 3.0, continuous rendering paced to the display refresh rate) |
 | `NoiseRenderer` | Draws one full-screen triangle each frame, uploads `uTime`, `uAmplitude`, `uMode`, `uResolution` and a fresh random `uSeed` |
 | `Shaders` | GLSL ES 3.00 vertex + fragment shader |
 | `NoiseSettings` | `SharedPreferences` store; the service observes it, so slider/mode changes apply live |
@@ -113,7 +120,7 @@ gradle/wrapper/                      # committed wrapper (jar + properties)
 app/build.gradle.kts
 app/src/main/AndroidManifest.xml
 app/src/main/java/pl/vovcia/softtempest/
-    MainActivity.kt  OverlayService.kt  NoiseGLSurfaceView.kt
+    MainActivity.kt  OverlayService.kt  NoiseTextureView.kt
     NoiseRenderer.kt Shaders.kt        Settings.kt
 app/src/main/res/                    # layout, strings, icons
 .github/workflows/build.yml

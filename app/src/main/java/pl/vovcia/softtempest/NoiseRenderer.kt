@@ -1,12 +1,9 @@
 package pl.vovcia.softtempest
 
 import android.opengl.GLES30
-import android.opengl.GLSurfaceView
 import android.os.SystemClock
 import android.util.Log
 import java.security.SecureRandom
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
 
 /**
  * OpenGL ES 3.0 renderer that draws one full-screen triangle through the noise fragment shader.
@@ -14,8 +11,11 @@ import javax.microedition.khronos.opengles.GL10
  * Every frame gets a fresh 32-bit seed from a CSPRNG so the pattern is unpredictable and never
  * repeats. [amplitude] and [mode] are written from the main thread and read on the GL thread;
  * both are `@Volatile` primitives so no locking is required.
+ *
+ * The renderer is independent of the surface type; [NoiseTextureView] drives it from its own
+ * EGL thread. All methods must be called with a current GL context.
  */
-class NoiseRenderer : GLSurfaceView.Renderer {
+class NoiseRenderer {
 
     @Volatile var amplitude: Float = NoiseSettings.DEFAULT_AMPLITUDE
     @Volatile var mode: Int = NoiseSettings.DEFAULT_MODE
@@ -39,7 +39,7 @@ class NoiseRenderer : GLSurfaceView.Renderer {
     private var height = 1
     private var startNanos = 0L
 
-    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+    fun onSurfaceCreated() {
         program = buildProgram(Shaders.VERTEX, Shaders.FRAGMENT)
         uTime = GLES30.glGetUniformLocation(program, "uTime")
         uAmplitude = GLES30.glGetUniformLocation(program, "uAmplitude")
@@ -57,13 +57,13 @@ class NoiseRenderer : GLSurfaceView.Renderer {
         startNanos = SystemClock.elapsedRealtimeNanos()
     }
 
-    override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) {
+    fun onSurfaceChanged(w: Int, h: Int) {
         width = w.coerceAtLeast(1)
         height = h.coerceAtLeast(1)
         GLES30.glViewport(0, 0, width, height)
     }
 
-    override fun onDrawFrame(gl: GL10?) {
+    fun onDrawFrame() {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         if (program == 0) return
 
@@ -81,6 +81,18 @@ class NoiseRenderer : GLSurfaceView.Renderer {
         GLES30.glBindVertexArray(vao)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3)
         GLES30.glBindVertexArray(0)
+    }
+
+    /** Releases GL objects. Must be called with the context current, before it is destroyed. */
+    fun onSurfaceDestroyed() {
+        if (vao != 0) {
+            GLES30.glDeleteVertexArrays(1, intArrayOf(vao), 0)
+            vao = 0
+        }
+        if (program != 0) {
+            GLES30.glDeleteProgram(program)
+            program = 0
+        }
     }
 
     private fun buildProgram(vertexSrc: String, fragmentSrc: String): Int {
