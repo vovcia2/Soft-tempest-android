@@ -12,7 +12,26 @@
 
     <string name="overlay_switch">Noise overlay</string>
     <string name="overlay_running">Overlay is running</string>
+    <string name="overlay_running_saw">Overlay is running (standard mode: opacity capped by the system, hidden on the lock screen)</string>
+    <string name="overlay_running_a11y">Overlay is running (accessibility mode: full strength, covers the lock screen)</string>
     <string name="overlay_stopped">Overlay is stopped</string>
+
+    <string name="a11y_card_title">Lock screen &amp; full strength</string>
+    <string name="a11y_card_body">Optional. Enabling the Soft TEMPEST accessibility service lets the overlay be a trusted system layer: it covers the lock screen, status bar and navigation bar, the opacity cap no longer applies, touches still pass through, and it starts at boot before unlock. The service requests no accessibility events and cannot read the screen.</string>
+    <string name="a11y_status_disabled">Accessibility service is off. Standard overlay is used.</string>
+    <string name="a11y_status_enabled_not_bound">Accessibility service is enabled but not yet connected.</string>
+    <string name="a11y_status_connected">Accessibility service connected. Trusted overlay is used.</string>
+    <string name="a11y_button_enable">Enable in Accessibility settings</string>
+    <string name="a11y_button_manage">Accessibility settings</string>
+    <string name="a11y_restricted_hint">On Android 13+ a sideloaded app is blocked by \"Restricted settings\" until you allow it: App info → ⋮ → Allow restricted settings.</string>
+    <string name="a11y_caveat">Note: some banking apps refuse to run while any accessibility service is enabled.</string>
+
+    <string name="a11y_service_label">Soft TEMPEST noise overlay</string>
+    <string name="a11y_service_summary">Trusted full-screen noise layer, including the lock screen</string>
+    <string name="a11y_service_description">Lets Soft TEMPEST draw its noise layer as a trusted overlay above the lock screen at full strength while keeping touches passing through. The service does not receive accessibility events and cannot read screen content.</string>
+
+    <string name="restore_on_boot">Restore on boot</string>
+    <string name="restore_on_boot_hint">If the overlay was running when the device shut down, start it again after boot and after app updates.</string>
 
     <string name="amplitude_label">Noise amplitude (opacity)</string>
     <string name="amplitude_value">%1$d %%</string>

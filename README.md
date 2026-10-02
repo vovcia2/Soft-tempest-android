@@ -48,7 +48,12 @@ try to work around them.
    (`1 − (1−a)(1−b)`). A `SurfaceView` adds a second layer, so 0.79 window + 0.79 surface
    = 0.96 > 0.8 and touches are dropped. A `TextureView` is composited into the window's own
    buffer, leaving a single layer whose alpha is the window alpha.
-8. **"Screen overlay detected".** Permission dialogs and some Settings screens refuse input
+8. **Lock screen.** `TYPE_APPLICATION_OVERLAY` is z-ordered below the keyguard, status bar and
+   navigation bar (layer 11 vs 17/15/24 in the Android 15 window policy), so the standard
+   backend never covers the lock screen. The optional accessibility backend uses
+   `TYPE_ACCESSIBILITY_OVERLAY` (layer 31), which does cover it. Neither covers the always-on
+   display or a switched-off panel.
+9. **"Screen overlay detected".** Permission dialogs and some Settings screens refuse input
    while any overlay is on top (`FLAG_WINDOW_IS_OBSCURED`). Stop the overlay to use them.
 
 ## How it works
@@ -56,11 +61,15 @@ try to work around them.
 | Component | Role |
 |-----------|------|
 | `MainActivity` | Permission flow (`SYSTEM_ALERT_WINDOW`, `POST_NOTIFICATIONS`), Start/Stop switch, amplitude slider, noise-mode selection, disclaimer |
-| `OverlayService` | Foreground service (`specialUse`) that adds a `TYPE_APPLICATION_OVERLAY` window with `FLAG_NOT_TOUCHABLE \| FLAG_NOT_FOCUSABLE \| FLAG_LAYOUT_IN_SCREEN \| FLAG_LAYOUT_NO_LIMITS`, `PixelFormat.TRANSLUCENT`, `MATCH_PARENT × MATCH_PARENT`; notification with a Stop action |
+| `NoiseOverlayWindow` | The click-through full-screen window itself (`FLAG_NOT_TOUCHABLE \| FLAG_NOT_FOCUSABLE \| FLAG_LAYOUT_IN_SCREEN \| FLAG_LAYOUT_NO_LIMITS`, `PixelFormat.TRANSLUCENT`, `MATCH_PARENT × MATCH_PARENT`), shared by both backends; pauses rendering on screen off |
+| `OverlayService` | Standard backend: foreground service (`specialUse`) adding the window as `TYPE_APPLICATION_OVERLAY`; notification with a Stop action |
+| `NoiseAccessibilityService` | Optional trusted backend: accessibility service adding the window as `TYPE_ACCESSIBILITY_OVERLAY` (above the lock screen, no opacity cap); takes over from `OverlayService` while enabled |
+| `OverlayController` / `OverlayState` | Start/Stop routing between the backends and the shared running state |
 | `NoiseTextureView` | Transparent `TextureView` with its own EGL thread (RGBA8888, OpenGL ES 3.0, continuous rendering paced to the display refresh rate) |
 | `NoiseRenderer` | Draws one full-screen triangle each frame, uploads `uTime`, `uAmplitude`, `uMode`, `uResolution` and a fresh random `uSeed` |
 | `Shaders` | GLSL ES 3.00 vertex + fragment shader |
 | `NoiseSettings` | `SharedPreferences` store; the service observes it, so slider/mode changes apply live |
+| `BootReceiver` | On `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, restarts the overlay if it was running when the device shut down and "Restore on boot" is enabled |
 
 ### Shader design
 
@@ -96,11 +105,49 @@ The Gradle wrapper is committed and pinned (Gradle 8.14.3, AGP 8.13.2, Kotlin 2.
 # → app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### GitHub Actions
+### Versioning & releases
 
-`.github/workflows/build.yml` builds the debug APK on every push to `main`, on pull requests
-and on manual dispatch, and uploads it as the `app-debug-apk` artifact (Actions tab → run →
-Artifacts). The debug keystore is generated automatically, so no secrets are needed.
+Versions are [semantic versions](https://semver.org) derived from git tags `vMAJOR.MINOR.PATCH`;
+nothing is hard-coded in the build files.
+
+| State of the checkout | `versionName` | `versionCode` |
+|-----------------------|---------------|---------------|
+| exactly on tag `v1.2.3` | `1.2.3` | `1020300` |
+| 5 commits after `v1.2.3` | `1.2.3-dev.5+<sha>` | `1020305` |
+| no tag reachable | `0.0.0-dev.<commits>+<sha>` | `<commits>` |
+
+`versionCode = MAJOR·1 000 000 + MINOR·10 000 + PATCH·100 + min(commits since tag, 99)`, so it is
+monotonic and Android accepts every release as an upgrade. The APK is named
+`softtempest-<versionName>-<buildType>.apk`. `./gradlew printVersionName` shows the value.
+
+**Automated releases** (`.github/workflows/release.yml`): every push to `main`
+
+1. computes the next version from the commit messages since the last tag, following
+   [Conventional Commits](https://www.conventionalcommits.org): `fix:` → patch, `feat:` → minor,
+   a `!` after the type or a `BREAKING CHANGE:` footer → major, anything else → patch;
+2. creates the tag `vX.Y.Z` (the first release is `v0.1.0`);
+3. builds the release APK with that version baked in;
+4. publishes a GitHub Release with the changelog and `softtempest-X.Y.Z-release.apk` attached.
+
+Run the workflow manually from the Actions tab to force a `patch`, `minor` or `major` bump.
+Add `[skip ci]` to a commit message to push to `main` without releasing.
+
+**CI builds** (`.github/workflows/build.yml`): pushes to other branches and pull requests build a
+debug APK and upload it as the artifact `softtempest-<versionName>-debug`.
+
+**Signing.** Release builds are signed with a keystore supplied through repository secrets. Without
+it the workflow falls back to a throw-away debug key, which means every release has a different
+signature and Android refuses to update over a previous install. To fix that once:
+
+```bash
+keytool -genkeypair -v -keystore release.jks -alias softtempest \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 release.jks   # paste into the SIGNING_KEYSTORE_BASE64 secret
+```
+
+Then set the secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS`
+(`softtempest`) and `SIGNING_KEY_PASSWORD` under *Settings → Secrets and variables → Actions*.
+Keep `release.jks` safe and private: anyone holding it can sign updates for installed copies.
 
 ## Usage
 
@@ -110,20 +157,35 @@ Artifacts). The debug keystore is generated automatically, so no secrets are nee
    which the foreground service needs for its status notification).
 4. Adjust **amplitude** and pick a **mode**; changes apply immediately.
 5. Stop from the switch or from the notification's **Stop** action.
+6. **Lock screen & full strength (optional).** Enable the *Soft TEMPEST noise overlay*
+   accessibility service from the card in the app. The overlay then becomes a trusted system
+   layer: it covers the lock screen, status bar and navigation bar, the 80 % opacity cap no
+   longer applies, touches still pass through, and the system starts it at boot before the
+   first unlock. The service requests no accessibility events and cannot read screen content
+   (see `res/xml/accessibility_service_config.xml`). On Android 13+ a sideloaded APK is
+   blocked by "Restricted settings" until you allow it from App info. Some banking apps refuse
+   to run while any accessibility service is enabled; that is their policy, not something the
+   app can influence.
+7. **Restore on boot** (on by default) brings the overlay back after a reboot or app update if
+   it was running. The last explicit Start/Stop is what gets restored; a process kill by the
+   system does not count as a stop. Restoration happens after the first unlock, because the
+   settings live in credential-encrypted storage.
 
 ## Project layout
 
 ```
 settings.gradle.kts / build.gradle.kts / gradle.properties
+app/build.gradle.kts                 # also: git-tag semver, APK naming, release signing
 gradle/libs.versions.toml            # pinned plugin and library versions
 gradle/wrapper/                      # committed wrapper (jar + properties)
 app/build.gradle.kts
 app/src/main/AndroidManifest.xml
 app/src/main/java/pl/vovcia/softtempest/
     MainActivity.kt  OverlayService.kt  NoiseTextureView.kt
-    NoiseRenderer.kt Shaders.kt        Settings.kt
+    NoiseRenderer.kt Shaders.kt        Settings.kt  BootReceiver.kt
 app/src/main/res/                    # layout, strings, icons
-.github/workflows/build.yml
+.github/workflows/build.yml          # CI debug build for branches and PRs
+.github/workflows/release.yml        # semver tag + release APK on every push to main
 ```
 
 ## License
