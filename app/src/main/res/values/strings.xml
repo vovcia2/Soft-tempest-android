@@ -27,11 +27,13 @@
     <string name="mode_temporal_desc">Horizontal HF noise plus several sub-patterns mixed within one frame for extra temporal decorrelation.</string>
 
     <string name="disclaimer_title">Limitations (read this)</string>
-    <string name="disclaimer_body">
+    <string name="disclaimer_body" formatted="false">
         • Windows flagged FLAG_SECURE (banking, DRM video, password screens) are rendered by the system so that this overlay does NOT appear above them. Those screens are not protected.\n
         • Noise is re-randomised every frame because a static pattern averages out as 1/√N over N captured frames. Even so, averaging still reduces the effect; this is a noise-floor raise, not a guarantee.\n
         • No effectiveness has been measured with real RF equipment on your device. Treat this as a prototype and as a complement to hardware shielding, never a replacement.\n
-        • Continuous full-screen GPU rendering costs battery.
+        • Continuous full-screen GPU rendering costs battery.\n
+        • Android 12+ caps the opacity of click-through overlays at about 80 %; above that the system would block touches to other apps. The slider\'s top end is therefore the system cap.\n
+        • While the overlay runs, some permission dialogs and Settings screens refuse taps (\"screen overlay detected\"). Stop the overlay to use them.
     </string>
 
     <string name="notification_channel_name">Noise overlay</string>

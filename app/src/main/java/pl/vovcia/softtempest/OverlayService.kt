@@ -13,6 +13,7 @@ import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.hardware.input.InputManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -31,7 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * The window is a `TYPE_APPLICATION_OVERLAY` that is click-through (`FLAG_NOT_TOUCHABLE`),
  * never takes focus, and covers the whole screen including the status/navigation bar areas.
- * A [NoiseGLSurfaceView] inside it renders the noise continuously on the GPU.
+ * A [NoiseTextureView] inside it renders the noise continuously on the GPU.
  *
  * Rendering is paused while the screen is off to save battery; there is nothing to mask then.
  */
@@ -41,7 +42,7 @@ class OverlayService : Service() {
     private lateinit var windowContext: Context
     private lateinit var windowManager: WindowManager
     private lateinit var settings: NoiseSettings
-    private var glView: NoiseGLSurfaceView? = null
+    private var glView: NoiseTextureView? = null
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         glView?.applySettings(settings)
@@ -51,8 +52,8 @@ class OverlayService : Service() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> glView?.onPause()
-                Intent.ACTION_SCREEN_ON -> glView?.onResume()
+                Intent.ACTION_SCREEN_OFF -> glView?.pause()
+                Intent.ACTION_SCREEN_ON -> glView?.resume()
             }
         }
     }
@@ -98,8 +99,13 @@ class OverlayService : Service() {
 
         if (glView != null) return // already running; just refreshed the notification
 
-        val view = NoiseGLSurfaceView(windowContext).also { it.applySettings(settings) }
-        windowManager.addView(view, buildLayoutParams())
+        val lp = buildLayoutParams()
+        val view = NoiseTextureView(windowContext).also {
+            it.renderer.windowAlpha = lp.alpha
+            it.targetFps = defaultDisplay()?.refreshRate ?: 60f
+            it.applySettings(settings)
+        }
+        windowManager.addView(view, lp)
         glView = view
 
         settings.registerListener(prefsListener)
@@ -119,7 +125,7 @@ class OverlayService : Service() {
         glView?.let { view ->
             settings.unregisterListener(prefsListener)
             runCatching { unregisterReceiver(screenReceiver) }
-            view.onPause()
+            view.pause()
             runCatching { windowManager.removeViewImmediate(view) }
                 .onFailure { Log.w(TAG, "removeView failed", it) }
         }
@@ -141,11 +147,19 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                // Required for TextureView in a WindowManager-added window (no Activity here).
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.TOP or Gravity.START
         lp.title = "SoftTempestNoise"
+        // Android 12+ drops "untrusted" touches that pass through an overlay window whose
+        // *window* alpha (LayoutParams.alpha, not pixel content) exceeds the system threshold
+        // (0.8 by default). FLAG_NOT_TOUCHABLE alone does not exempt us, so every other app,
+        // the launcher included, would become unclickable. Stay just below the threshold; the
+        // renderer compensates so the slider still maps to the effective opacity.
+        lp.alpha = maxPassThroughWindowAlpha()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             lp.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
@@ -156,7 +170,22 @@ class OverlayService : Service() {
         // Ask for the panel's highest refresh rate: more frames per second means more independent
         // noise realisations per second (helps the temporal mode on 90/120 Hz panels).
         pickFastestDisplayMode()?.let { lp.preferredDisplayModeId = it }
+        // Keep the window's single buffer layer as the only obscuring surface of this UID; see
+        // NoiseTextureView for why a SurfaceView would double-count against the touch threshold.
         return lp
+    }
+
+    /**
+     * Highest window alpha at which touches still pass through to the apps underneath.
+     * Slightly below the reported threshold to be safe against float rounding in the
+     * input dispatcher.
+     */
+    private fun maxPassThroughWindowAlpha(): Float {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return 1f
+        val threshold = runCatching {
+            getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
+        }.getOrDefault(DEFAULT_MAX_OBSCURING_OPACITY)
+        return (threshold - 0.01f).coerceIn(0.05f, 1f)
     }
 
     private fun defaultDisplay(): Display? =
@@ -235,6 +264,7 @@ class OverlayService : Service() {
         private const val TAG = "OverlayService"
         private const val CHANNEL_ID = "overlay"
         private const val NOTIFICATION_ID = 1
+        private const val DEFAULT_MAX_OBSCURING_OPACITY = 0.8f
 
         const val ACTION_START = "pl.vovcia.softtempest.action.START"
         const val ACTION_STOP = "pl.vovcia.softtempest.action.STOP"
