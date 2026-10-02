@@ -105,11 +105,49 @@ The Gradle wrapper is committed and pinned (Gradle 8.14.3, AGP 8.13.2, Kotlin 2.
 # → app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### GitHub Actions
+### Versioning & releases
 
-`.github/workflows/build.yml` builds the debug APK on every push to `main`, on pull requests
-and on manual dispatch, and uploads it as the `app-debug-apk` artifact (Actions tab → run →
-Artifacts). The debug keystore is generated automatically, so no secrets are needed.
+Versions are [semantic versions](https://semver.org) derived from git tags `vMAJOR.MINOR.PATCH`;
+nothing is hard-coded in the build files.
+
+| State of the checkout | `versionName` | `versionCode` |
+|-----------------------|---------------|---------------|
+| exactly on tag `v1.2.3` | `1.2.3` | `1020300` |
+| 5 commits after `v1.2.3` | `1.2.3-dev.5+<sha>` | `1020305` |
+| no tag reachable | `0.0.0-dev.<commits>+<sha>` | `<commits>` |
+
+`versionCode = MAJOR·1 000 000 + MINOR·10 000 + PATCH·100 + min(commits since tag, 99)`, so it is
+monotonic and Android accepts every release as an upgrade. The APK is named
+`softtempest-<versionName>-<buildType>.apk`. `./gradlew printVersionName` shows the value.
+
+**Automated releases** (`.github/workflows/release.yml`): every push to `main`
+
+1. computes the next version from the commit messages since the last tag, following
+   [Conventional Commits](https://www.conventionalcommits.org): `fix:` → patch, `feat:` → minor,
+   a `!` after the type or a `BREAKING CHANGE:` footer → major, anything else → patch;
+2. creates the tag `vX.Y.Z` (the first release is `v0.1.0`);
+3. builds the release APK with that version baked in;
+4. publishes a GitHub Release with the changelog and `softtempest-X.Y.Z-release.apk` attached.
+
+Run the workflow manually from the Actions tab to force a `patch`, `minor` or `major` bump.
+Add `[skip ci]` to a commit message to push to `main` without releasing.
+
+**CI builds** (`.github/workflows/build.yml`): pushes to other branches and pull requests build a
+debug APK and upload it as the artifact `softtempest-<versionName>-debug`.
+
+**Signing.** Release builds are signed with a keystore supplied through repository secrets. Without
+it the workflow falls back to a throw-away debug key, which means every release has a different
+signature and Android refuses to update over a previous install. To fix that once:
+
+```bash
+keytool -genkeypair -v -keystore release.jks -alias softtempest \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 release.jks   # paste into the SIGNING_KEYSTORE_BASE64 secret
+```
+
+Then set the secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS`
+(`softtempest`) and `SIGNING_KEY_PASSWORD` under *Settings → Secrets and variables → Actions*.
+Keep `release.jks` safe and private: anyone holding it can sign updates for installed copies.
 
 ## Usage
 
@@ -137,6 +175,7 @@ Artifacts). The debug keystore is generated automatically, so no secrets are nee
 
 ```
 settings.gradle.kts / build.gradle.kts / gradle.properties
+app/build.gradle.kts                 # also: git-tag semver, APK naming, release signing
 gradle/libs.versions.toml            # pinned plugin and library versions
 gradle/wrapper/                      # committed wrapper (jar + properties)
 app/build.gradle.kts
@@ -145,7 +184,8 @@ app/src/main/java/pl/vovcia/softtempest/
     MainActivity.kt  OverlayService.kt  NoiseTextureView.kt
     NoiseRenderer.kt Shaders.kt        Settings.kt  BootReceiver.kt
 app/src/main/res/                    # layout, strings, icons
-.github/workflows/build.yml
+.github/workflows/build.yml          # CI debug build for branches and PRs
+.github/workflows/release.yml        # semver tag + release APK on every push to main
 ```
 
 ## License
