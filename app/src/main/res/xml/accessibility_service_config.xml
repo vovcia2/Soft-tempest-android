@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Deliberately minimal: no event types, no window-content retrieval, no flags. The service only
+  needs the right to add a TYPE_ACCESSIBILITY_OVERLAY window; it cannot observe the screen.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/a11y_service_description"
+    android:summary="@string/a11y_service_summary"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="1000"
+    android:settingsActivity="pl.vovcia.softtempest.MainActivity" />

@@ -12,6 +12,8 @@ import android.util.Log
  * BOOT_COMPLETED and MY_PACKAGE_REPLACED are exempt from the background foreground-service
  * start restrictions, and the `specialUse` type is allowed from BOOT_COMPLETED on Android 15+.
  * The overlay permission can be revoked while the app is not running, so it is re-checked here.
+ * If the accessibility backend is enabled, the system starts it on its own (before the first
+ * unlock) and it takes over; the foreground service is only a fallback.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -25,6 +27,7 @@ class BootReceiver : BroadcastReceiver() {
     private fun restore(context: Context) {
         val settings = NoiseSettings(context)
         if (!settings.restoreOnBoot || !settings.overlayEnabled) return
+        if (NoiseAccessibilityService.connected.value) return // it restores itself
         if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "Overlay permission revoked; not restoring overlay")
             return

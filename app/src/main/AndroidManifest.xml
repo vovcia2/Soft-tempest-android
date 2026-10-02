@@ -39,6 +39,24 @@
                 android:value="Renders a full-screen, click-through, per-frame random noise overlay on top of the display to raise the noise floor of the display path's electromagnetic emission (soft TEMPEST display masking). The overlay must stay alive while the user has it enabled, independent of the controlling Activity." />
         </service>
 
+        <!--
+          Trusted overlay backend. Requires the user to enable the service in Accessibility
+          settings. The config requests no events and no window content; it only hosts the
+          noise window above the lock screen without the opacity cap.
+        -->
+        <service
+            android:name=".NoiseAccessibilityService"
+            android:exported="true"
+            android:label="@string/a11y_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

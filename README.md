@@ -48,7 +48,12 @@ try to work around them.
    (`1 − (1−a)(1−b)`). A `SurfaceView` adds a second layer, so 0.79 window + 0.79 surface
    = 0.96 > 0.8 and touches are dropped. A `TextureView` is composited into the window's own
    buffer, leaving a single layer whose alpha is the window alpha.
-8. **"Screen overlay detected".** Permission dialogs and some Settings screens refuse input
+8. **Lock screen.** `TYPE_APPLICATION_OVERLAY` is z-ordered below the keyguard, status bar and
+   navigation bar (layer 11 vs 17/15/24 in the Android 15 window policy), so the standard
+   backend never covers the lock screen. The optional accessibility backend uses
+   `TYPE_ACCESSIBILITY_OVERLAY` (layer 31), which does cover it. Neither covers the always-on
+   display or a switched-off panel.
+9. **"Screen overlay detected".** Permission dialogs and some Settings screens refuse input
    while any overlay is on top (`FLAG_WINDOW_IS_OBSCURED`). Stop the overlay to use them.
 
 ## How it works
@@ -56,7 +61,10 @@ try to work around them.
 | Component | Role |
 |-----------|------|
 | `MainActivity` | Permission flow (`SYSTEM_ALERT_WINDOW`, `POST_NOTIFICATIONS`), Start/Stop switch, amplitude slider, noise-mode selection, disclaimer |
-| `OverlayService` | Foreground service (`specialUse`) that adds a `TYPE_APPLICATION_OVERLAY` window with `FLAG_NOT_TOUCHABLE \| FLAG_NOT_FOCUSABLE \| FLAG_LAYOUT_IN_SCREEN \| FLAG_LAYOUT_NO_LIMITS`, `PixelFormat.TRANSLUCENT`, `MATCH_PARENT × MATCH_PARENT`; notification with a Stop action |
+| `NoiseOverlayWindow` | The click-through full-screen window itself (`FLAG_NOT_TOUCHABLE \| FLAG_NOT_FOCUSABLE \| FLAG_LAYOUT_IN_SCREEN \| FLAG_LAYOUT_NO_LIMITS`, `PixelFormat.TRANSLUCENT`, `MATCH_PARENT × MATCH_PARENT`), shared by both backends; pauses rendering on screen off |
+| `OverlayService` | Standard backend: foreground service (`specialUse`) adding the window as `TYPE_APPLICATION_OVERLAY`; notification with a Stop action |
+| `NoiseAccessibilityService` | Optional trusted backend: accessibility service adding the window as `TYPE_ACCESSIBILITY_OVERLAY` (above the lock screen, no opacity cap); takes over from `OverlayService` while enabled |
+| `OverlayController` / `OverlayState` | Start/Stop routing between the backends and the shared running state |
 | `NoiseTextureView` | Transparent `TextureView` with its own EGL thread (RGBA8888, OpenGL ES 3.0, continuous rendering paced to the display refresh rate) |
 | `NoiseRenderer` | Draws one full-screen triangle each frame, uploads `uTime`, `uAmplitude`, `uMode`, `uResolution` and a fresh random `uSeed` |
 | `Shaders` | GLSL ES 3.00 vertex + fragment shader |
@@ -111,7 +119,16 @@ Artifacts). The debug keystore is generated automatically, so no secrets are nee
    which the foreground service needs for its status notification).
 4. Adjust **amplitude** and pick a **mode**; changes apply immediately.
 5. Stop from the switch or from the notification's **Stop** action.
-6. **Restore on boot** (on by default) brings the overlay back after a reboot or app update if
+6. **Lock screen & full strength (optional).** Enable the *Soft TEMPEST noise overlay*
+   accessibility service from the card in the app. The overlay then becomes a trusted system
+   layer: it covers the lock screen, status bar and navigation bar, the 80 % opacity cap no
+   longer applies, touches still pass through, and the system starts it at boot before the
+   first unlock. The service requests no accessibility events and cannot read screen content
+   (see `res/xml/accessibility_service_config.xml`). On Android 13+ a sideloaded APK is
+   blocked by "Restricted settings" until you allow it from App info. Some banking apps refuse
+   to run while any accessibility service is enabled; that is their policy, not something the
+   app can influence.
+7. **Restore on boot** (on by default) brings the overlay back after a reboot or app update if
    it was running. The last explicit Start/Stop is what gets restored; a process kill by the
    system does not count as a stop. Restoration happens after the first unlock, because the
    settings live in credential-encrypted storage.
