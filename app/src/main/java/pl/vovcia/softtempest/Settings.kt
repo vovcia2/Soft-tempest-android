@@ -24,6 +24,19 @@ class NoiseSettings(context: Context) {
         get() = prefs.getInt(KEY_MODE, DEFAULT_MODE).coerceIn(MODE_WHITE, MODE_TEMPORAL)
         set(value) = prefs.edit().putInt(KEY_MODE, value.coerceIn(MODE_WHITE, MODE_TEMPORAL)).apply()
 
+    /**
+     * Whether the user last left the overlay running. Set by [OverlayService] on start and on an
+     * explicit stop (not on a system kill), so a reboot can restore the user's last choice.
+     */
+    var overlayEnabled: Boolean
+        get() = prefs.getBoolean(KEY_OVERLAY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_OVERLAY_ENABLED, value).apply()
+
+    /** Restore [overlayEnabled] after boot (and after the app is updated). */
+    var restoreOnBoot: Boolean
+        get() = prefs.getBoolean(KEY_RESTORE_ON_BOOT, true)
+        set(value) = prefs.edit().putBoolean(KEY_RESTORE_ON_BOOT, value).apply()
+
     fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
         prefs.registerOnSharedPreferenceChangeListener(listener)
 
@@ -34,6 +47,8 @@ class NoiseSettings(context: Context) {
         const val PREFS_NAME = "noise_settings"
         const val KEY_AMPLITUDE = "amplitude"
         const val KEY_MODE = "mode"
+        const val KEY_OVERLAY_ENABLED = "overlay_enabled"
+        const val KEY_RESTORE_ON_BOOT = "restore_on_boot"
 
         const val MODE_WHITE = 0
         const val MODE_HFREQ_HORIZONTAL = 1

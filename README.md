@@ -61,6 +61,7 @@ try to work around them.
 | `NoiseRenderer` | Draws one full-screen triangle each frame, uploads `uTime`, `uAmplitude`, `uMode`, `uResolution` and a fresh random `uSeed` |
 | `Shaders` | GLSL ES 3.00 vertex + fragment shader |
 | `NoiseSettings` | `SharedPreferences` store; the service observes it, so slider/mode changes apply live |
+| `BootReceiver` | On `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, restarts the overlay if it was running when the device shut down and "Restore on boot" is enabled |
 
 ### Shader design
 
@@ -110,6 +111,10 @@ Artifacts). The debug keystore is generated automatically, so no secrets are nee
    which the foreground service needs for its status notification).
 4. Adjust **amplitude** and pick a **mode**; changes apply immediately.
 5. Stop from the switch or from the notification's **Stop** action.
+6. **Restore on boot** (on by default) brings the overlay back after a reboot or app update if
+   it was running. The last explicit Start/Stop is what gets restored; a process kill by the
+   system does not count as a stop. Restoration happens after the first unlock, because the
+   settings live in credential-encrypted storage.
 
 ## Project layout
 
@@ -121,7 +126,7 @@ app/build.gradle.kts
 app/src/main/AndroidManifest.xml
 app/src/main/java/pl/vovcia/softtempest/
     MainActivity.kt  OverlayService.kt  NoiseTextureView.kt
-    NoiseRenderer.kt Shaders.kt        Settings.kt
+    NoiseRenderer.kt Shaders.kt        Settings.kt  BootReceiver.kt
 app/src/main/res/                    # layout, strings, icons
 .github/workflows/build.yml
 ```

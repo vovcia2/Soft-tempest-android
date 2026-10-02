@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
         setupAmplitude()
         setupModes()
         setupSwitch()
+        setupRestoreOnBoot()
         observeServiceState()
     }
 
@@ -86,6 +87,13 @@ class MainActivity : AppCompatActivity() {
         binding.overlaySwitch.setOnCheckedChangeListener { _, checked ->
             if (updatingSwitch) return@setOnCheckedChangeListener
             if (checked) startOverlay() else OverlayService.stop(this)
+        }
+    }
+
+    private fun setupRestoreOnBoot() {
+        binding.restoreOnBootSwitch.isChecked = settings.restoreOnBoot
+        binding.restoreOnBootSwitch.setOnCheckedChangeListener { _, checked ->
+            settings.restoreOnBoot = checked
         }
     }
 

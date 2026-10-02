@@ -88,6 +88,21 @@
                     android:text="@string/overlay_stopped"
                     android:textColor="@color/on_surface_muted" />
 
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/restoreOnBootSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/restore_on_boot"
+                    android:textAppearance="?attr/textAppearanceTitleSmall" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/restore_on_boot_hint"
+                    android:textColor="@color/on_surface_muted"
+                    android:textSize="12sp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

@@ -14,6 +14,9 @@
     <string name="overlay_running">Overlay is running</string>
     <string name="overlay_stopped">Overlay is stopped</string>
 
+    <string name="restore_on_boot">Restore on boot</string>
+    <string name="restore_on_boot_hint">If the overlay was running when the device shut down, start it again after boot and after app updates.</string>
+
     <string name="amplitude_label">Noise amplitude (opacity)</string>
     <string name="amplitude_value">%1$d %%</string>
     <string name="amplitude_hint">Higher values mask more but make the screen harder to read. This is the real trade-off; there is no free lunch.</string>

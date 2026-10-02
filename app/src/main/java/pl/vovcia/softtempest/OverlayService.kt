@@ -71,6 +71,7 @@ class OverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                settings.overlayEnabled = false // explicit user stop: do not restore on boot
                 stopOverlay()
                 stopSelf()
                 return START_NOT_STICKY
@@ -96,6 +97,8 @@ class OverlayService : Service() {
             stopSelf()
             return
         }
+
+        settings.overlayEnabled = true
 
         if (glView != null) return // already running; just refreshed the notification
 
